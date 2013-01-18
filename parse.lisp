@@ -13,10 +13,6 @@
 
 (in-package :command-line-arguments)
 
-(defvar *command-line-arguments* nil
-  "a list of strings, the arguments passed to the program on its command-line,
-or what's currently left of them as they are processed")
-
 (defvar *command-line-options* nil
   "command-line options as parsed into a plist")
 

@@ -1,7 +1,7 @@
 #+xcvb (module ())
 
 (cl:defpackage :command-line-arguments
-  (:use :cl)
+  (:use :cl :asdf/driver)
   (:export
    #:*command-line-arguments*
    #:*command-line-options*

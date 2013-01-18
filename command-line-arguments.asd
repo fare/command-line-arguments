@@ -15,7 +15,7 @@
   :licence "MIT"
   :description "small library to deal with command-line arguments"
   :long-description "A library to abstract away the parsing of Unix-style command-line arguments"
-  ;;:depends-on (:cl-launch) ; cl-launch affects the build too much for unsuspecting ASDF users.
+  :depends-on (:asdf-driver)
   :components
   ((:file "pkgdcl")
    (:file "argv" :depends-on ("pkgdcl"))
