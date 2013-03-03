@@ -9,13 +9,13 @@
 ;;;                                                                  ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(asdf:defsystem :command-line-arguments
+(defsystem :command-line-arguments
   :author ("Francois-Rene Rideau")
   :maintainer "Francois-Rene Rideau"
   :licence "MIT"
   :description "small library to deal with command-line arguments"
   :long-description "A library to abstract away the parsing of Unix-style command-line arguments"
-  :depends-on (:asdf-driver)
+  :depends-on (#-asdf3 :asdf-driver)
   :components
   ((:file "pkgdcl")
    (:file "argv" :depends-on ("pkgdcl"))
