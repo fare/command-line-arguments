@@ -39,3 +39,6 @@ TODO
 
 * Similar bug to fix, keeping a regression test:
   (process-command-line-options '(("export-model" :type boolean :optional nil)) '("--export-model" "no"))
+
+* Use the equivalent of UIOP 3.1.4.5's standard-case-symbol-name instead of string-upcase;
+  when the UIOP has settled in, use UIOP's version instead.
