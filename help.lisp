@@ -31,13 +31,13 @@
                        (stable-sort n #'< :key #'length)
                        n))))
             (when documentation
-              (format stream "~& ~32A ~8A ~@<~@;~{~A ~}~@:>"
+              (format stream "~& ~32A ~8A ~@<~@;~{~A~^ ~}~@:>"
                       (format nil "~{ ~A~}" (option-names names))
                       (string-downcase type)
                       (split-sequence documentation #\Space))
               (format stream "~:[~*~; (default: ~S)~]~%" initial-value-p initial-value))
             (when negation-documentation
-              (format stream " ~32A ~8A ~@<~@;~{~A ~}~@:>~%"
+              (format stream " ~32A ~8A ~@<~@;~{~A~^ ~}~@:>~%"
                       (format nil "~{ ~A~}" (option-names (make-negated-names names negation)))
                       (string-downcase type)
                       (split-sequence negation-documentation #\Space)))))))
