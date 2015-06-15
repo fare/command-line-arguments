@@ -1,22 +1,9 @@
-COMMAND-LINE-ARGUMENTS
-
-
-HOMEPAGE
-
-	http://common-lisp.net/project/qitab/
-
-
-SEE ALSO
-
-For a fancier take on the same general idea, see Didier Verna's CLON:
-	http://www.lrde.epita.fr/~didier/software/lisp/clon.php
-
-By comparison, this library has fewer features but is slightly more portable.
-
-
 TODO
 
 * Migrate to CLON?
+  Not until Didier Verna
+   (1) merges our patch to split the core from the rest of CLON, and
+   (2) implements a way to directly call a function with the required arguments.
 
 * add documentation besides the comments in the code.
 
