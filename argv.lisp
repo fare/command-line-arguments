@@ -15,7 +15,7 @@
 (declaim (ftype (function (t t) (values t t)) process-command-line-options))
 
 (defun get-command-line-arguments ()
-  asdf/image:*command-line-arguments*)
+  uiop:*command-line-arguments*)
 
 (defun compute-and-process-command-line-options (specification)
   (process-command-line-options specification (get-command-line-arguments)))

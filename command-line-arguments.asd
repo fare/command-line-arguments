@@ -15,7 +15,7 @@
   :licence "MIT"
   :description "small library to deal with command-line arguments"
   :long-description "A library to abstract away the parsing of Unix-style command-line arguments"
-  :version "1.0.1"
+  :version "1.0.2"
   :depends-on (#-asdf3 :uiop)
   :components
   ((:file "pkgdcl")
