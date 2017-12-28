@@ -125,15 +125,18 @@
   ;; (as e.g. read by #'FOO) then it's the symbol-function of FOO.
   ;; Otherwise, it's an error.
   ;; See COMMAND-LINE-ACTION below for how to interpret the results.
+  ;; When ACTION is a function then return a cons of the keyword of
+  ;; name and the action.
   (cond
     ((not actionp)
      (intern (string-upcase name) :keyword))
     ((or (functionp action) (symbolp action))
      ;; (keywordp action) and (null action) are implicitly included by symbolp
-     action)
+     (cons (intern (string-upcase name) :keyword) action))
     ((and (consp action) (eq 'function (car action))
           (consp (cdr action)) (null (cddr action)))
-     (symbol-function (cadr action)))
+     (cons (intern (string-upcase name) :keyword)
+           (symbol-function (cadr action))))
     (t
      (error "Invalid action spec ~S for option ~S" action name))))
 
@@ -143,7 +146,11 @@
     (keyword  (setf *command-line-options*
 		    (list* action value *command-line-options*)))
     (symbol   (set action value))
-    (function (funcall action value))))
+    ;; Function actions are saved as (keyword . function).
+    (cons (setf *command-line-options*
+                ;; Add the result of calling action to `*command-line-options*'.
+                (list* (car action) (funcall (cdr action) value)
+                       *command-line-options*)))))
 
 (defun prepare-command-line-options-specification (specification)
   "Given a SPECIFICATION, return a hash-table mapping
