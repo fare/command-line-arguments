@@ -11,4 +11,5 @@
    #:get-command-line-arguments
    #:handle-command-line
    #:show-option-help
+   #:define-command
    ))

@@ -349,3 +349,172 @@
     (do-process-command-line-options)
     (values *command-line-options* *command-line-arguments*)))
 
+(defmacro define-command (name args pre-help post-help &rest body)
+  "Defines show-help-for-NAME, run-NAME, and NAME functions.
+
+The `define-command' macro may be used to simultaneously define the
+following three functions which are useful for defining a function
+which may be invoked from the command line.  For example, the
+following invocation of `define-command' on FOO results in:
+
+    (define-command foo (noun verb &spec +command-line-spec+ &aux scratch)
+      \"Usage: foo NOUN VERB [OPTIONS...]
+    Do VERB to NOUN according to OPTIONS.\"
+      #.(format nil \"~%Built with ~a version ~a.~%\"
+                (lisp-implementation-type)
+                (lisp-implementation-version))
+      (declare (verbose))
+      (when help (show-help-for-foo))
+      #|...implementation...|#)
+
+show-help-for-FOO
+:   Prints help and option information for FOO to STDOUT and then
+    exits with `uiop:quit'.
+
+    The docstring passed to `define-command' becomes the help text
+    printed before options.  A second docstring passed as the fourth
+    argument to `define-command' is printed after the options.
+
+run-FOO
+:   This function is meant to be used as a `defsystem' :ENTRY-POINT.
+    It runs FOO on the command line arguments by invoking
+    `handle-command-line'.
+
+FOO
+:   The &BODY passed to `define-command' becomes the body of the FOO
+    function.  The positional required command line arguments become
+    named arguments to FOO and the command line options passed in
+    behind the &SPEC keyword in the argument list become keyword
+    arguments to FOO.
+
+    The macro-expanded prototype for FOO in this example would be the
+    following (where all keyword arguments are option names from
+    +command-line-spec+).
+
+        (DEFUN FOO (NOUN VERB &KEY B CHECK VERBOSE WARN HELP VERSION &AUX SCRATCH))
+"
+  (labels ((plist-get (item list &key (test #'eql) &aux last)
+             (loop :for element :in list :do
+                (cond
+                  (last (return element))
+                  ((funcall test item element) (setf last t)))))
+           (plist-drop-if (predicate list &aux last)
+             (nreverse (reduce (lambda (acc element)
+                                 (cond
+                                   (last (setf last nil) acc)
+                                   ((funcall predicate element)
+                                    (setf last t) acc)
+                                   (t (cons element acc))))
+                               list :initial-value '())))
+           (plist-drop (item list &key (test #'eql))
+             (plist-drop-if (lambda (el) (funcall test item el)) list))
+           (make-keyword (name)
+             (intern (string name) :keyword))
+           (take-while (pred seq)
+             (if (and (not (null seq)) (funcall pred (car seq)))
+                 (cons (car seq) (take-while pred (cdr seq)))
+                 '()))
+
+           (take-until (pred seq)
+             (take-while (complement pred) seq))
+           (drop-while (pred seq)
+             (if (and (not (null seq)) (funcall pred (car seq)))
+                 (drop-while pred (cdr seq))
+                 seq))
+
+           (drop-until (pred seq)
+             (drop-while (complement pred) seq))
+           (interleave (list sep &optional rest)
+             (cond
+               ((cdr list)
+                (interleave (cdr list) sep (cons sep (cons (car list) rest))))
+               (list (reverse (cons (car list) rest)))
+               (t nil)))
+           (mapconcat (func list sep)
+             (apply #'concatenate 'string (interleave (mapcar func list) sep))))
+    (let* ((package (package-name *package*))
+           (command-line-specification (plist-get (intern "&SPEC" package) args))
+           (rest-arg (let ((rest-arg (plist-get (intern "&REST" package) args)))
+                       (when rest-arg (list (intern "&REST" package) rest-arg))))
+           (positional-args (take-until
+                             (lambda (el) (equal #\& (aref (symbol-name el) 0)))
+                             (plist-drop (intern "&REST" package) args)))
+           (aux-args (plist-drop
+                      (intern "&REST" package)
+                      (plist-drop
+                       (intern "&SPEC" package)
+                       (drop-until
+                        (lambda (el) (equal #\& (aref (symbol-name el) 0)))
+                        args))))
+           (arity (length positional-args)))
+      (flet ((symcat (&rest syms)
+               (intern (mapconcat (lambda (el) (string-upcase (string el)))
+                                  syms "-"))))
+        `(progn
+           (defun ,(symcat 'show-help-for name) ()
+             ,(format nil "Print help information for `~a' and exit."
+                      (symbol-name name))
+             (format t ,pre-help)
+             (format t "~&~%OPTIONS:~%")
+             (show-option-help ,command-line-specification :sort-names t)
+             (format t ,post-help)
+             (quit))
+
+           (defun ,(symcat 'run name) ()
+             ,(format nil "Run `~a' on `*command-line-arguments*'."
+                      (symbol-name name))
+             ;; Unless the main function takes rest arguments check for
+             ;; exact number of positional arguments.
+             (setf *lisp-interaction* nil)
+             ,@(unless rest-arg
+                 `((when (< (length *command-line-arguments*) ,arity)
+                     ;; Don't print the arity requirement if the first
+                     ;; argument looks like it's asking for help.
+                     (unless (let ((it (car *command-line-arguments*)))
+                               (and it (stringp it)
+                                    (or (string= it "h")
+                                        (string= it "-h")
+                                        (string= it "-?")
+                                        (string= it "--help"))))
+                       (format
+                        t ,(format nil "~@(~r non-option arguments are required, ~
+                                     ~~d given~).~~%Arguments: ~~s~~%~~%" arity)
+                        (length *command-line-arguments*)
+                        *command-line-arguments*))
+                     (,(symcat 'show-help-for name)))))
+             (handle-command-line ,command-line-specification ',name
+                                  :name ,(symbol-name name) ; Alternately (argv0).
+                                  :positional-arity ,arity ; Positional arguments.
+                                  :rest-arity
+                                  ,(if (member '&rest args)
+                                       (if command-line-specification
+                                           ;; NOTE: If both rest and
+                                           ;; keyword arguments convert
+                                           ;; the rest of the command
+                                           ;; line arguments into a
+                                           ;; keyword argument.
+                                           (make-keyword (second rest-arg))
+                                           ;; Otherwise keep/pass as a
+                                           ;; normal &rest argument.
+                                           t)
+                                       nil))
+             0)
+
+           (defun ,name
+               ,(append positional-args
+                        (unless command-line-specification rest-arg)
+                        (let ((keys (mapcar
+                                     (lambda (el) (intern (string-upcase (caar el))))
+                                     (eval command-line-specification))))
+                          (when keys
+                            (cons '&key
+                                  ;; NOTE: See above note.  Convert &rest
+                                  ;; args to a keyword argument when other
+                                  ;; keyword arguments are given via the
+                                  ;; COMMAND-LINE-SPECIFICATION.
+                                  (if (and rest-arg command-line-specification)
+                                      (cons (second rest-arg) keys)
+                                      keys))))
+                        aux-args)
+             ,pre-help
+             ,@body))))))

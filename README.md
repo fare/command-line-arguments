@@ -45,6 +45,45 @@ Here is what a prototypical use looks like:
         ;; NIL means ignore it. A keyword means pass this rest as a keyword argument.
         :rest-arity t))
 
+The `define-command` macro may be used to simultaneously define the
+following three functions which are useful for defining a function
+which may be invoked from the command line.  For example, the
+following invocation of `define-command` on `FOO` results in:
+
+    (define-command foo (noun verb &spec +command-line-spec+ &aux scratch)
+      "Usage: foo NOUN VERB [OPTIONS...]
+    Do VERB to NOUN according to OPTIONS."
+      #.(format nil "~%Built with ~a version ~a.~%"
+                (lisp-implementation-type)
+                (lisp-implementation-version))
+      (declare (verbose))
+      (when help (show-help-for-foo))
+      #|...implementation...|#)
+
+show-help-for-FOO
+:   Prints help and option information for FOO to STDOUT and then
+    exits with `uiop:quit`.
+
+    The docstring passed to `define-command` becomes the help text
+    printed before options.  A second docstring passed as the fourth
+    argument to `define-command` is printed after the options.
+
+run-FOO
+:   Similar to the `main` example above this function is meant to be
+    used as a `defsystem` `:entry-point`.  It runs FOO on the command
+    line arguments by invoking `handle-command-line`.
+
+FOO
+:   The `&body` passed to `define-command` becomes the body of the FOO
+    function.  The positional required command line arguments become
+    named arguments to FOO and the command line options passed in
+    behind the `&spec` keyword in the argument list become keyword
+    arguments to FOO.
+
+    The macro-expanded prototype for FOO in this example would be the
+    following.
+    
+        (DEFUN FOO (NOUN VERB &KEY B CHECK VERBOSE WARN HELP VERSION &AUX SCRATCH))
 
 Examples
 --------
