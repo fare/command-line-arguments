@@ -482,6 +482,7 @@ FOO
                         (length *command-line-arguments*)
                         *command-line-arguments*))
                      (,(symcat 'show-help-for name)))))
+             (in-package ,(make-keyword package))
              (handle-command-line ,command-line-specification ',name
                                   :name ,(symbol-name name) ; Alternately (argv0).
                                   :positional-arity ,arity ; Positional arguments.
