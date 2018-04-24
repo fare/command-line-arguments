@@ -446,11 +446,33 @@ FOO
                        (drop-until
                         (lambda (el) (equal #\& (aref (symbol-name el) 0)))
                         args))))
-           (arity (length positional-args)))
+           (arity (length positional-args))
+           (opts (eval command-line-specification))
+           (keys (mapcar
+                  (lambda (el)
+                    (let ((name (intern (string-upcase (caar el))))
+                          (default (plist-get :initial-value (cdr el))))
+                      (if default
+                          (list name default)
+                          name)))
+                  opts))
+           (command-line-run-p (gensym "COMMAND-LINE-RUN-P"))
+           (actions (remove nil
+                      (mapcar
+                       (lambda (el)
+                         (let ((action (plist-get :action (cdr el)))
+                               (name (intern (string-upcase (caar el)))))
+                           (when action
+                             `(when (and (not ,command-line-run-p) ,name)
+                                (funcall ,action ,name)))))
+                       opts))))
       (flet ((symcat (&rest syms)
                (intern (mapconcat (lambda (el) (string-upcase (string el)))
                                   syms "-"))))
         `(progn
+           (defvar ,command-line-run-p nil
+             ,(format nil "True if running ~a from the command line."
+                      (symbol-name name)))
            (defun ,(symcat 'show-help-for name) ()
              ,(format nil "Print help information for `~a' and exit."
                       (symbol-name name))
@@ -466,56 +488,64 @@ FOO
              ;; Unless the main function takes rest arguments check for
              ;; exact number of positional arguments.
              (setf *lisp-interaction* nil)
-             ,@(unless rest-arg
-                 `((when (< (length *command-line-arguments*) ,arity)
-                     ;; Don't print the arity requirement if the first
-                     ;; argument looks like it's asking for help.
-                     (unless (let ((it (car *command-line-arguments*)))
-                               (and it (stringp it)
-                                    (or (string= it "h")
-                                        (string= it "-h")
-                                        (string= it "-?")
-                                        (string= it "--help"))))
-                       (format
-                        t ,(format nil "~@(~r non-option arguments are required, ~
-                                     ~~d given~).~~%Arguments: ~~s~~%~~%" arity)
-                        (length *command-line-arguments*)
-                        *command-line-arguments*))
-                     (,(symcat 'show-help-for name)))))
-             (in-package ,(make-keyword package))
-             (handle-command-line ,command-line-specification ',name
-                                  :name ,(symbol-name name) ; Alternately (argv0).
-                                  :positional-arity ,arity ; Positional arguments.
-                                  :rest-arity
-                                  ,(if (member '&rest args)
-                                       (if command-line-specification
-                                           ;; NOTE: If both rest and
-                                           ;; keyword arguments convert
-                                           ;; the rest of the command
-                                           ;; line arguments into a
-                                           ;; keyword argument.
-                                           (make-keyword (second rest-arg))
-                                           ;; Otherwise keep/pass as a
-                                           ;; normal &rest argument.
-                                           t)
-                                       nil))
-             0)
+             (let ((,command-line-run-p t))
+               ,@(unless rest-arg
+                   `((when (< (length *command-line-arguments*) ,arity)
+                       ;; Don't print the arity requirement if the first
+                       ;; argument looks like it's asking for help.
+                       (unless (let ((it (car *command-line-arguments*)))
+                                 (and it (stringp it)
+                                      (or (string= it "h")
+                                          (string= it "-h")
+                                          (string= it "-?")
+                                          (string= it "--help"))))
+                         (format
+                          t ,(format nil "~@(~r non-option arguments are ~
+                                     required, ~~d given~). ~
+                                     ~~%Arguments: ~~s~~%~~%" arity)
+                          (length *command-line-arguments*)
+                          *command-line-arguments*))
+                       (,(symcat 'show-help-for name)))))
+               (in-package ,(make-keyword package))
+               (handle-command-line
+                ,command-line-specification ',name
+                :name ,(symbol-name name) ; Alternately (argv0).
+                :positional-arity ,arity ; Positional arguments.
+                :rest-arity
+                ,(if (member '&rest args)
+                     (if command-line-specification
+                         ;; NOTE: If both rest and
+                         ;; keyword arguments convert
+                         ;; the rest of the command
+                         ;; line arguments into a
+                         ;; keyword argument.
+                         (make-keyword (second rest-arg))
+                         ;; Otherwise keep/pass as a
+                         ;; normal &rest argument.
+                         t)
+                     nil))
+               0))
 
            (defun ,name
                ,(append positional-args
                         (unless command-line-specification rest-arg)
-                        (let ((keys (mapcar
-                                     (lambda (el) (intern (string-upcase (caar el))))
-                                     (eval command-line-specification))))
-                          (when keys
-                            (cons '&key
-                                  ;; NOTE: See above note.  Convert &rest
-                                  ;; args to a keyword argument when other
-                                  ;; keyword arguments are given via the
-                                  ;; COMMAND-LINE-SPECIFICATION.
-                                  (if (and rest-arg command-line-specification)
-                                      (cons (second rest-arg) keys)
-                                      keys))))
+                        (when keys
+                          (cons '&key
+                                ;; NOTE: See above note.  Convert &rest
+                                ;; args to a keyword argument when other
+                                ;; keyword arguments are given via the
+                                ;; COMMAND-LINE-SPECIFICATION.
+                                (if (and rest-arg command-line-specification)
+                                    (cons (second rest-arg) keys)
+                                    keys)))
                         aux-args)
              ,pre-help
-             ,@body))))))
+             ;; Don't accidentally place the actions before a DECLARE
+             ;; form at the top of the function body.
+             ,@(if (and actions
+                        (listp (car body))
+                        (eql 'declare (caar body)))
+                   (append (list (car body))
+                           actions
+                           (cdr body))
+                   body)))))))

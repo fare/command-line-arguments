@@ -78,7 +78,12 @@ FOO
     function.  The positional required command line arguments become
     named arguments to FOO and the command line options passed in
     behind the `&spec` keyword in the argument list become keyword
-    arguments to FOO.
+    arguments to FOO.  When supplied `:initial-value` properties of
+    command lines become defaults of the corresponding keyword
+    arguments.  When supplied `:action` properties of command line
+    arguments have calls to their actions prepended to the body of the
+    function.  Actions are only called when the keyword argument has a
+    non-nil value.
 
     The macro-expanded prototype for FOO in this example would be the
     following.
