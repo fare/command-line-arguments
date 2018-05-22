@@ -368,8 +368,7 @@ following invocation of `define-command' on FOO results in:
       #|...implementation...|#)
 
 show-help-for-FOO
-:   Prints help and option information for FOO to STDOUT and then
-    exits with `uiop:quit'.
+:   Prints help and option information for FOO to STDOUT.
 
     The docstring passed to `define-command' becomes the help text
     printed before options.  A second docstring passed as the fourth
@@ -479,8 +478,7 @@ FOO
              (format t ,pre-help)
              (format t "~&~%OPTIONS:~%")
              (show-option-help ,command-line-specification :sort-names t)
-             (format t ,post-help)
-             (quit))
+             (format t ,post-help))
 
            (defun ,(symcat 'run name) ()
              ,(format nil "Run `~a' on `*command-line-arguments*'."
@@ -505,7 +503,8 @@ FOO
                                      ~~%Arguments: ~~s~~%~~%" arity)
                           (length *command-line-arguments*)
                           *command-line-arguments*))
-                       (,(symcat 'show-help-for name)))))
+                       (,(symcat 'show-help-for name))
+                       (return-from ,(symcat 'run name)))))
                (in-package ,(make-keyword package))
                (handle-command-line
                 ,command-line-specification ',name
