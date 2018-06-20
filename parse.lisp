@@ -538,7 +538,9 @@ FOO
                                     (cons (second rest-arg) keys)
                                     keys)))
                         aux-args)
-             ,pre-help
+             ,(with-output-to-string (str)
+                (format str "~a~&~%Keyword arguments:~%" pre-help)
+                (show-option-help opts :sort-names t :stream str :docstring t))
              ;; Don't accidentally place the actions before a DECLARE
              ;; form at the top of the function body.
              ,@(if (and actions
