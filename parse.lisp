@@ -463,7 +463,7 @@ FOO
                                (name (intern (string-upcase (caar el)))))
                            (when action
                              `(when (and (not ,command-line-run-p) ,name)
-                                (funcall ,action ,name)))))
+                                (setf ,name (funcall ,action ,name))))))
                        opts))))
       (flet ((symcat (&rest syms)
                (intern (mapconcat (lambda (el) (string-upcase (string el)))
