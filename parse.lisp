@@ -475,7 +475,12 @@ FOO
            (defun ,(symcat 'show-help-for name) ()
              ,(format nil "Print help information for `~a' and exit."
                       (symbol-name name))
-             (format t ,pre-help)
+             (format t ,(concatenate 'string
+                          ;; Prepend usage information for command-line help.
+                          (format nil "Usage: ~a [OPTIONS] ~{~a~^ ~}~%~%"
+                                  (string-downcase (symbol-name name))
+                                  (mapcar #'symbol-name positional-args))
+                          pre-help))
              (format t "~&~%OPTIONS:~%")
              (show-option-help ,command-line-specification :sort-names t)
              (format t ,post-help))
