@@ -12,4 +12,5 @@
    #:handle-command-line
    #:show-option-help
    #:define-command
+   #:command-line-arity
    ))
