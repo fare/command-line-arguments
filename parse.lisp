@@ -492,42 +492,36 @@ FOO
              ;; exact number of positional arguments.
              (setf *lisp-interaction* nil)
              (let ((,command-line-run-p t))
-               ,@(unless rest-arg
-                   `((when (< (length *command-line-arguments*) ,arity)
-                       ;; Don't print the arity requirement if the first
-                       ;; argument looks like it's asking for help.
-                       (unless (let ((it (car *command-line-arguments*)))
-                                 (and it (stringp it)
-                                      (or (string= it "h")
-                                          (string= it "-h")
-                                          (string= it "-?")
-                                          (string= it "--help"))))
-                         (format
-                          t ,(format nil "~@(~r non-option arguments are ~
-                                     required, ~~d given~). ~
-                                     ~~%Arguments: ~~s~~%~~%" arity)
-                          (length *command-line-arguments*)
-                          *command-line-arguments*))
-                       (,(symcat 'show-help-for name))
-                       (return-from ,(symcat 'run name)))))
                (in-package ,(make-keyword package))
-               (handle-command-line
-                ,command-line-specification ',name
-                :name ,(symbol-name name) ; Alternately (argv0).
-                :positional-arity ,arity ; Positional arguments.
-                :rest-arity
-                ,(if (member '&rest args)
-                     (if command-line-specification
-                         ;; NOTE: If both rest and
-                         ;; keyword arguments convert
-                         ;; the rest of the command
-                         ;; line arguments into a
-                         ;; keyword argument.
-                         (make-keyword (second rest-arg))
-                         ;; Otherwise keep/pass as a
-                         ;; normal &rest argument.
-                         t)
-                     nil))
+               (handler-case
+                   (handle-command-line
+                    ,command-line-specification ',name
+                    :name ,(symbol-name name) ; Alternately (argv0).
+                    :positional-arity ,arity ; Positional arguments.
+                    :rest-arity
+                    ,(if (member '&rest args)
+                         (if command-line-specification
+                             ;; NOTE: If both rest and
+                             ;; keyword arguments convert
+                             ;; the rest of the command
+                             ;; line arguments into a
+                             ;; keyword argument.
+                             (make-keyword (second rest-arg))
+                             ;; Otherwise keep/pass as a
+                             ;; normal &rest argument.
+                             t)
+                         nil))
+                 (command-line-arity (c)
+                   ;; Don't print the arity requirement if the first
+                   ;; argument looks like it's asking for help.
+                   (unless (let ((it (car *command-line-arguments*)))
+                             (and it (stringp it)
+                                  (or (string= it "-h")
+                                      (string= it "-?")
+                                      (string= it "--help"))))
+                     (format t "~A~%" c))
+                   (,(symcat 'show-help-for name))
+                   (return-from ,(symcat 'run name))))
                0))
 
            (defun ,name
