@@ -477,7 +477,7 @@ FOO
                       (symbol-name name))
              (format t ,(concatenate 'string
                           ;; Prepend usage information for command-line help.
-                          (format nil "Usage: ~a [OPTIONS] ~{~a~^ ~}~%~%"
+                          (format nil "Usage: ~a [OPTION]... ~{~a~^ ~}~%~%"
                                   (string-downcase (symbol-name name))
                                   (mapcar #'symbol-name positional-args))
                           pre-help))
