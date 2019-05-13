@@ -477,9 +477,18 @@ FOO
                       (symbol-name name))
              (format t ,(concatenate 'string
                           ;; Prepend usage information for command-line help.
-                          (format nil "Usage: ~a [OPTION]... ~{~a~^ ~}~%~%"
+                          (format nil "Usage: ~a [OPTION]... ~{~a~^ ~}~a~%~%"
                                   (string-downcase (symbol-name name))
-                                  (mapcar #'symbol-name positional-args))
+                                  (mapcar #'symbol-name positional-args)
+                                  ;; Add &REST argument to command line usage.
+                                  (let ((rest-args (member '&rest args)))
+                                    (if (and rest-args
+                                             command-line-specification)
+                                        (concatenate
+                                            'string " ["
+                                            (symbol-name (second rest-args))
+                                            "]...")
+                                        "")))
                           pre-help))
              (format t "~&~%OPTIONS:~%")
              (show-option-help ,command-line-specification :sort-names t)
