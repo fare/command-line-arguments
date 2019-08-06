@@ -468,7 +468,7 @@ FOO
       (flet ((symcat (&rest syms)
                (intern (mapconcat (lambda (el) (string-upcase (string el)))
                                   syms "-"))))
-        `(progn
+        `(locally (declare (special ,command-line-run-p))
            (defvar ,command-line-run-p nil
              ,(format nil "True if running ~a from the command line."
                       (symbol-name name)))
