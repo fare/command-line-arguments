@@ -462,8 +462,9 @@ FOO
                          (let ((action (plist-get :action (cdr el)))
                                (name (intern (string-upcase (caar el)))))
                            (when action
-                             `(when (and (not ,command-line-run-p) ,name)
-                                (setf ,name (funcall ,action ,name))))))
+                             `(locally (declare (special ,command-line-run-p))
+                                (when (and (not ,command-line-run-p) ,name)
+                                  (setf ,name (funcall ,action ,name)))))))
                        opts))))
       (flet ((symcat (&rest syms)
                (intern (mapconcat (lambda (el) (string-upcase (string el)))
@@ -501,6 +502,7 @@ FOO
              ;; exact number of positional arguments.
              (setf *lisp-interaction* nil)
              (let ((,command-line-run-p t))
+               (declare (special ,command-line-run-p))
                (in-package ,(make-keyword package))
                (handler-case
                    (handle-command-line
