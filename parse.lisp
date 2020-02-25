@@ -103,13 +103,13 @@
                        :test 'equal)))
             (unless optional
               (register-finalizer))
-            #'(lambda (value)
+            (cons (intern (string-upcase name) :keyword) #'(lambda (value)
                 (when optional
                   (register-finalizer))
                 (case value
                   ((nil) (set symbol nil))
                   ((t)   (error "Option ~A requires a parameter" (option-name name)))
-                  (otherwise (push value (symbol-value symbol))))))))))
+                  (otherwise (push value (symbol-value symbol)))))))))))
 
 (defun finalize-list (name symbol optional actual-action)
   (let ((value (symbol-value symbol)))
