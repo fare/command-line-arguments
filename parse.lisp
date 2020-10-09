@@ -326,7 +326,8 @@
     (loop :for (function . parameters) :in (gethash :finalizers *command-line-option-specification*)
       :do (apply function parameters))))
 
-(defun process-command-line-options (specification command-line)
+(defun process-command-line-options (specification
+                                     &optional (command-line *command-line-arguments*))
   "SPECIFICATION is a list as described above.
    COMMAND-LINE is the list of tokens to be parsed.
    Return two values:
