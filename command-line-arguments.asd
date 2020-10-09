@@ -9,7 +9,7 @@
 ;;;                                                                  ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defsystem :command-line-arguments
+(defsystem "command-line-arguments"
   :author ("Francois-Rene Rideau")
   :maintainer "Francois-Rene Rideau"
   :licence "MIT"
@@ -21,4 +21,10 @@
   ((:file "pkgdcl")
    (:file "argv" :depends-on ("pkgdcl"))
    (:file "parse" :depends-on ("pkgdcl"))
-   (:file "help" :depends-on ("pkgdcl"))))
+   (:file "help" :depends-on ("pkgdcl")))
+  :in-order-to ((test-op (test-op command-line-arguments/test))))
+
+(defsystem "command-line-arguments/test"
+  :depends-on (:command-line-arguments :alexandria :hu.dwim.stefil)
+  :components ((:file "test"))
+  :perform (test-op (o c) (call-function "command-line-arguments/test::test-suite")))
