@@ -103,13 +103,13 @@
                        :test 'equal)))
             (unless optional
               (register-finalizer))
-            #'(lambda (value)
+            (cons (intern (string-upcase name) :keyword) #'(lambda (value)
                 (when optional
                   (register-finalizer))
                 (case value
                   ((nil) (set symbol nil))
                   ((t)   (error "Option ~A requires a parameter" (option-name name)))
-                  (otherwise (push value (symbol-value symbol))))))))))
+                  (otherwise (push value (symbol-value symbol)))))))))))
 
 (defun finalize-list (name symbol optional actual-action)
   (let ((value (symbol-value symbol)))
@@ -125,15 +125,18 @@
   ;; (as e.g. read by #'FOO) then it's the symbol-function of FOO.
   ;; Otherwise, it's an error.
   ;; See COMMAND-LINE-ACTION below for how to interpret the results.
+  ;; When ACTION is a function then return a cons of the keyword of
+  ;; name and the action.
   (cond
     ((not actionp)
      (intern (string-upcase name) :keyword))
     ((or (functionp action) (symbolp action))
      ;; (keywordp action) and (null action) are implicitly included by symbolp
-     action)
+     (cons (intern (string-upcase name) :keyword) action))
     ((and (consp action) (eq 'function (car action))
           (consp (cdr action)) (null (cddr action)))
-     (symbol-function (cadr action)))
+     (cons (intern (string-upcase name) :keyword)
+           (symbol-function (cadr action))))
     (t
      (error "Invalid action spec ~S for option ~S" action name))))
 
@@ -143,7 +146,11 @@
     (keyword  (setf *command-line-options*
 		    (list* action value *command-line-options*)))
     (symbol   (set action value))
-    (function (funcall action value))))
+    ;; Function actions are saved as (keyword . function).
+    (cons (setf *command-line-options*
+                ;; Add the result of calling action to `*command-line-options*'.
+                (list* (car action) (funcall (cdr action) value)
+                       *command-line-options*)))))
 
 (defun prepare-command-line-options-specification (specification)
   "Given a SPECIFICATION, return a hash-table mapping
@@ -343,3 +350,214 @@
     (do-process-command-line-options)
     (values *command-line-options* *command-line-arguments*)))
 
+(defmacro define-command (name args pre-help post-help &rest body)
+  "Defines show-help-for-NAME, run-NAME, and NAME functions.
+
+The `define-command' macro may be used to simultaneously define the
+following three functions which are useful for defining a function
+which may be invoked from the command line.  For example, the
+following invocation of `define-command' on FOO results in:
+
+    (define-command foo (noun verb &spec +command-line-spec+ &aux scratch)
+      \"Usage: foo NOUN VERB [OPTIONS...]
+    Do VERB to NOUN according to OPTIONS.\"
+      #.(format nil \"~%Built with ~a version ~a.~%\"
+                (lisp-implementation-type)
+                (lisp-implementation-version))
+      (declare (verbose))
+      (when help (show-help-for-foo))
+      #|...implementation...|#)
+
+show-help-for-FOO
+:   Prints help and option information for FOO to STDOUT.
+
+    The docstring passed to `define-command' becomes the help text
+    printed before options.  A second docstring passed as the fourth
+    argument to `define-command' is printed after the options.
+
+run-FOO
+:   This function is meant to be used as a `defsystem' :ENTRY-POINT.
+    It runs FOO on the command line arguments by invoking
+    `handle-command-line'.
+
+FOO
+:   The &BODY passed to `define-command' becomes the body of the FOO
+    function.  The positional required command line arguments become
+    named arguments to FOO and the command line options passed in
+    behind the &SPEC keyword in the argument list become keyword
+    arguments to FOO.
+
+    The macro-expanded prototype for FOO in this example would be the
+    following (where all keyword arguments are option names from
+    +command-line-spec+).
+
+        (DEFUN FOO (NOUN VERB &KEY B CHECK VERBOSE WARN HELP VERSION &AUX SCRATCH))
+"
+  (labels ((plist-get (item list &key (test #'eql) &aux last)
+             (loop :for element :in list :do
+                (cond
+                  (last (return element))
+                  ((funcall test item element) (setf last t)))))
+           (plist-drop-if (predicate list &aux last)
+             (nreverse (reduce (lambda (acc element)
+                                 (cond
+                                   (last (setf last nil) acc)
+                                   ((funcall predicate element)
+                                    (setf last t) acc)
+                                   (t (cons element acc))))
+                               list :initial-value '())))
+           (plist-drop (item list &key (test #'eql))
+             (plist-drop-if (lambda (el) (funcall test item el)) list))
+           (make-keyword (name)
+             (intern (string name) :keyword))
+           (take-while (pred seq)
+             (if (and (not (null seq)) (funcall pred (car seq)))
+                 (cons (car seq) (take-while pred (cdr seq)))
+                 '()))
+
+           (take-until (pred seq)
+             (take-while (complement pred) seq))
+           (drop-while (pred seq)
+             (if (and (not (null seq)) (funcall pred (car seq)))
+                 (drop-while pred (cdr seq))
+                 seq))
+
+           (drop-until (pred seq)
+             (drop-while (complement pred) seq))
+           (interleave (list sep &optional rest)
+             (cond
+               ((cdr list)
+                (interleave (cdr list) sep (cons sep (cons (car list) rest))))
+               (list (reverse (cons (car list) rest)))
+               (t nil)))
+           (mapconcat (func list sep)
+             (apply #'concatenate 'string (interleave (mapcar func list) sep))))
+    (let* ((package (package-name *package*))
+           (command-line-specification (plist-get (intern "&SPEC" package) args))
+           (rest-arg (let ((rest-arg (plist-get (intern "&REST" package) args)))
+                       (when rest-arg (list (intern "&REST" package) rest-arg))))
+           (positional-args (take-until
+                             (lambda (el) (equal #\& (aref (symbol-name el) 0)))
+                             (plist-drop (intern "&REST" package) args)))
+           (aux-args (plist-drop
+                      (intern "&REST" package)
+                      (plist-drop
+                       (intern "&SPEC" package)
+                       (drop-until
+                        (lambda (el) (equal #\& (aref (symbol-name el) 0)))
+                        args))))
+           (arity (length positional-args))
+           (opts (eval command-line-specification))
+           (keys (mapcar
+                  (lambda (el)
+                    (let ((name (intern (string-upcase (caar el))))
+                          (default (plist-get :initial-value (cdr el))))
+                      (if default
+                          (list name default)
+                          name)))
+                  opts))
+           (command-line-run-p (gensym "COMMAND-LINE-RUN-P"))
+           (actions (remove nil
+                      (mapcar
+                       (lambda (el)
+                         (let ((action (plist-get :action (cdr el)))
+                               (name (intern (string-upcase (caar el)))))
+                           (when action
+                             `(locally (declare (special ,command-line-run-p))
+                                (when (and (not ,command-line-run-p) ,name)
+                                  (setf ,name (funcall ,action ,name)))))))
+                       opts))))
+      (flet ((symcat (&rest syms)
+               (intern (mapconcat (lambda (el) (string-upcase (string el)))
+                                  syms "-"))))
+        `(locally (declare (special ,command-line-run-p))
+           (defvar ,command-line-run-p nil
+             ,(format nil "True if running ~a from the command line."
+                      (symbol-name name)))
+           (defun ,(symcat 'show-help-for name) ()
+             ,(format nil "Print help information for `~a' and exit."
+                      (symbol-name name))
+             (format t ,(concatenate 'string
+                          ;; Prepend usage information for command-line help.
+                          (format nil "Usage: ~a [OPTION]... ~{~a~^ ~}~a~%~%"
+                                  (string-downcase (symbol-name name))
+                                  (mapcar #'symbol-name positional-args)
+                                  ;; Add &REST argument to command line usage.
+                                  (let ((rest-args (member '&rest args)))
+                                    (if (and rest-args
+                                             command-line-specification)
+                                        (concatenate
+                                            'string " ["
+                                            (symbol-name (second rest-args))
+                                            "]...")
+                                        "")))
+                          pre-help))
+             (format t "~&~%OPTIONS:~%")
+             (show-option-help ,command-line-specification :sort-names t)
+             (format t ,post-help))
+
+           (defun ,(symcat 'run name) ()
+             ,(format nil "Run `~a' on `*command-line-arguments*'."
+                      (symbol-name name))
+             ;; Unless the main function takes rest arguments check for
+             ;; exact number of positional arguments.
+             (setf *lisp-interaction* nil)
+             (let ((,command-line-run-p t))
+               (declare (special ,command-line-run-p))
+               (in-package ,(make-keyword package))
+               (handler-case
+                   (handle-command-line
+                    ,command-line-specification ',name
+                    :name ,(symbol-name name) ; Alternately (argv0).
+                    :positional-arity ,arity ; Positional arguments.
+                    :rest-arity
+                    ,(if (member '&rest args)
+                         (if command-line-specification
+                             ;; NOTE: If both rest and
+                             ;; keyword arguments convert
+                             ;; the rest of the command
+                             ;; line arguments into a
+                             ;; keyword argument.
+                             (make-keyword (second rest-arg))
+                             ;; Otherwise keep/pass as a
+                             ;; normal &rest argument.
+                             t)
+                         nil))
+                 (command-line-arity (c)
+                   ;; Don't print the arity requirement if the first
+                   ;; argument looks like it's asking for help.
+                   (unless (let ((it (car *command-line-arguments*)))
+                             (and it (stringp it)
+                                  (or (string= it "-h")
+                                      (string= it "-?")
+                                      (string= it "--help"))))
+                     (format t "~A~%" c))
+                   (,(symcat 'show-help-for name))
+                   (return-from ,(symcat 'run name))))
+               0))
+
+           (defun ,name
+               ,(append positional-args
+                        (unless command-line-specification rest-arg)
+                        (when keys
+                          (cons '&key
+                                ;; NOTE: See above note.  Convert &rest
+                                ;; args to a keyword argument when other
+                                ;; keyword arguments are given via the
+                                ;; COMMAND-LINE-SPECIFICATION.
+                                (if (and rest-arg command-line-specification)
+                                    (cons (second rest-arg) keys)
+                                    keys)))
+                        aux-args)
+             ,(with-output-to-string (str)
+                (format str "~a~&~%Keyword arguments:~%" pre-help)
+                (show-option-help opts :sort-names t :stream str :docstring t))
+             ;; Don't accidentally place the actions before a DECLARE
+             ;; form at the top of the function body.
+             ,@(if (and actions
+                        (listp (car body))
+                        (eql 'declare (caar body)))
+                   (append (list (car body))
+                           actions
+                           (cdr body))
+                   body)))))))
